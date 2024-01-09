@@ -14,30 +14,31 @@ Console.WriteLine($"pow {pow}");
 
 var truncatedLog2 = (int)(log2);
 Console.WriteLine($"truncate log2: {truncatedLog2}");
- var maxBlockSize =1 << truncatedLog2;
+var maxBlockSize = 1 << truncatedLog2;
 
 var fileHashes = ComputeHashes(maxBlockSize, fileContent, rand);
-Console.WriteLine($"Haches: [{fileHashes}]");
+Console.WriteLine($"[{fileHashes}]");
+//System.IO.File.WriteAllText(".", "out.hashes");
 
 static string ComputeHashes(int maxBlockSize, byte[] fileContent, Random rand)
 {
     StringBuilder hashes = new StringBuilder();
-MemoryStream stream  = new System.IO.MemoryStream();
+    MemoryStream stream = new System.IO.MemoryStream();
     for (int i = 0; i < 10; ++i)
     {
-    var blockSize = rand.Next(maxBlockSize);
+        var blockSize = rand.Next(maxBlockSize);
         var blockData = new byte[blockSize];
 
-var offset = rand.Next(fileContent.Length - blockSize);
-stream.Position = offset;
+        var offset = rand.Next(fileContent.Length - blockSize);
+        stream.Position = offset;
         stream.Read(blockData, 0, blockSize);
         var hash = System.Security.Cryptography.SHA256.HashData(blockData);
-hashes.
-Append('"').Append(i).Append("\": {")
-.Append("\"offset\": \"").Append(offset).Append('"').AppendLine()
-.Append("\"blockSize\": \"").Append(blockSize).Append('"').AppendLine()
-.Append("\"hash\": \"").Append(Convert.ToHexString(hash)).Append('"').AppendLine();
-//.AppendLine(" }]");
+        hashes.
+        Append('"').Append(i).Append("\": {")
+        .Append("\"offset\": \"").Append(offset).Append("\", ").AppendLine()
+        .Append("\"blockSize\": \"").Append(blockSize).Append("\",").AppendLine()
+        .Append("\"hash\": \"").Append(Convert.ToHexString(hash)).Append("\" ]").AppendLine();
+        //.AppendLine(" }]");
     }
     return hashes.ToString();
 }
