@@ -1,54 +1,44 @@
 using System;
 using System.Text;
-using System.Data.SQLite;
-var connectionString = "Data Source=db.sqlite;Version=3;";
-using (SQLiteConnection connection = new SQLiteConnection(connectionString))
-{
-    string insertQuery = "INSERT INTO ZeroKelvin (`batch`, `file`, `content`) VALUES (@batch, @file, @content)";
-    using (SQLiteCommand insertCommand = new SQLiteCommand(insertQuery, connection))
-    {
-        insertCommand.Connection.Open();
-        insertCommand.Parameters.AddWithValue("@batch", args[0]);
-        insertCommand.Parameters.AddWithValue("@file", args[1]);
-        var fileHashes = ComputeHashes(args[1]);
-        insertCommand.Parameters.AddWithValue("@content", fileHashes);
-        var insertResult = insertCommand.ExecuteNonQuery();
-        Console.WriteLine($"{insertResult.ToString()} rows inserted");
-    }
-    Console.WriteLine("Doing useful work / sleeping");
-    // System.Threading.Thread.Sleep(26 * 1000);
+//using System.Data.SQLite;
 
-    string selectQuery = "SELECT batch, file, content FROM ZeroKelvin";
-    using (SQLiteCommand selectCommand = new SQLiteCommand(selectQuery, connection))
-    {
-        var selectResult = selectCommand.ExecuteReader();
-        selectResult.Read();
-        Console.WriteLine($"{(selectResult.HasRows ? "1" : "0")} rows selected: {selectResult[0]}, {selectResult[1]}, [{selectResult[2]}]");
-    }
+var rand = new Random();
+var fileContent = System.IO.File.ReadAllBytes(args[0]);
+var contentLength = fileContent.Length;
+//contentLength = 1025;
+Console.WriteLine($"content length: {contentLength}");
+var log2 = Math.Log2(contentLength);
+Console.WriteLine($"log2: {log2}");
+var pow = Math.Pow(2, log2);
+Console.WriteLine($"pow {pow}");
 
-    var deleteQuery = "DELETE FROM ZeroKelvin WHERE batch=@batch AND file = @file";
-    using (SQLiteCommand deleteCommand = new SQLiteCommand(deleteQuery, connection))
-    {
-        deleteCommand.Parameters.AddWithValue("@batch", args[0]);
-        deleteCommand.Parameters.AddWithValue("@file", args[1]);
-        var deleteResult = deleteCommand.ExecuteNonQuery();
-        Console.WriteLine($"{deleteResult.ToString()} rows deleted");
-    }
-}
+var truncatedLog2 = (int)(log2);
+Console.WriteLine($"truncate log2: {truncatedLog2}");
+ var maxBlockSize =1 << truncatedLog2;
 
-static string ComputeHashes(string fileName)
+var fileHashes = ComputeHashes(maxBlockSize, fileContent, rand);
+Console.WriteLine($"Haches: [{fileHashes}]");
+
+static string ComputeHashes(int maxBlockSize, byte[] fileContent, Random rand)
 {
     StringBuilder hashes = new StringBuilder();
-    FileStream file = System.IO.File.Open(fileName, FileMode.Open);
-    const int BlockSize = 65536 * 4;
-    var fileSize = file.Length;
-    var blockData = new byte[BlockSize + 100];
-    file.Position = BlockSize; // Skipping first block
-    for (int i = 1 * BlockSize; i <= fileSize - BlockSize; i += BlockSize)
+MemoryStream stream  = new System.IO.MemoryStream();
+    for (int i = 0; i < 10; ++i)
     {
-        file.Read(blockData, 0, BlockSize);
+    var blockSize = rand.Next(maxBlockSize);
+        var blockData = new byte[blockSize];
+
+var offset = rand.Next(fileContent.Length - blockSize);
+stream.Position = offset;
+        stream.Read(blockData, 0, blockSize);
         var hash = System.Security.Cryptography.SHA256.HashData(blockData);
-        hashes.AppendLine(Convert.ToHexString(hash)); // I'll ad a salt later
+hashes.
+Append('"').Append(i).Append("\": {")
+.Append("\"offset\": \"").Append(offset).Append('"').AppendLine()
+.Append("\"blockSize\": \"").Append(blockSize).Append('"').AppendLine()
+.Append("\"hash\": \"").Append(Convert.ToHexString(hash)).Append('"').AppendLine();
+//.AppendLine(" }]");
     }
     return hashes.ToString();
 }
+
