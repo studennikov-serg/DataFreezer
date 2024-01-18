@@ -13,41 +13,58 @@ static extern int boinc_send_trickle_up(string variety, string p);
 static extern int boinc_receive_trickle_down(string buf, int len);
 */
 
-try {
-//boinc_init();
-var rand = new Random();
-var fileInfo = new System.IO.FileInfo(args[0]);
-var contentLength = fileInfo.Length;
-//Console.WriteLine($"content length: {contentLength}");
-var log2 = Math.Log2(contentLength);
-//Console.WriteLine($"log2: {log2}");
+try
+{
+    //boinc_init();
+    var rand = new Random();
+    var fileInfo = new System.IO.FileInfo(args[0]);
+    if (fileInfo.LinkTarget != null)
+    {
+        fileInfo = new System.IO.FileInfo(fileInfo.LinkTarget);
+        Console.Error.WriteLine($"Resolved link: {fileInfo.Name}");
+    }
+    var contentLength = fileInfo.Length;
+    Console.Error.WriteLine($"content length: {contentLength}");
+    var fileBytes = System.IO.File.ReadAllBytes(args[0]);
+    Console.Error.WriteLine($"alter length: {fileBytes.Length}");
+    System.Threading.Thread.Sleep(1000 * 60 * 10);
+    for (int i = 0; i < 100 && i < fileBytes.Length; ++i)
+    {
+        Console.Error.WriteLine($"{(char)fileBytes[i]} {fileBytes[i]}");
+    }
+    var log2 = Math.Log2(contentLength);
+    Console.Error.WriteLine($"log2: {log2}");
 
-var truncatedLog2 = (int)(log2);
-//Console.WriteLine($"truncated log2: {truncatedLog2}");
-//var pow = Math.Pow(2, truncatedLog2);
-//Console.WriteLine($"pow {pow}");
-var maxBlockSize = 1 << ((truncatedLog2 - 10) + 10); // less than file size and is a power of 2, greater than 1 << 10
-
-var fileHashes = ComputeHashes(maxBlockSize, truncatedLog2 - 10, fileInfo, rand);
-Console.WriteLine($"[{fileHashes}]");
-} catch(Exception e) {
-Console.Error.WriteLine(e.ToString());
-return 1;
-//boinc_finish(1);
+    var truncatedLog2 = (int)(log2);
+    Console.Error.WriteLine($"truncated log2: {truncatedLog2}");
+    //var pow = Math.Pow(2, truncatedLog2);
+    //Console.WriteLine($"pow {pow}");
+    var maxBlockSize = 1 << truncatedLog2; // less than file size and is a power of 2
+    Console.Error.WriteLine($"Max block size: {maxBlockSize}");
+    var fileHashes = ComputeHashes(truncatedLog2, fileInfo, rand);
+    Console.WriteLine($"[{fileHashes}]");
 }
-finally {
-//boinc_finish(0);
+catch (Exception e)
+{
+    Console.Error.WriteLine(e.ToString());
+    return 1;
+    //boinc_finish(1);
+}
+finally
+{
+    //boinc_finish(0);
 }
 return 0;
 
-static string ComputeHashes(int maxBlockSize, int maxBlockSizeLog2, System.IO.FileInfo fileInfo, Random rand)
+static string ComputeHashes(int maxBlockSizeLog2, System.IO.FileInfo fileInfo, Random rand)
 {
     var hashes = new StringBuilder();
     hashes.AppendLine("<hashes>");
     FileStream stream = fileInfo.OpenRead();
     for (int i = 0; i < 10; ++i)
     {
-        var blockSize = maxBlockSize >> rand.Next(maxBlockSizeLog2);
+        var blockSize = 1 << (rand.Next(maxBlockSizeLog2 - 10) + 10 + 1);
+        Console.Error.WriteLine($"Random block size: {blockSize}");
         var blockData = new byte[blockSize];
 
         var offset = rand.Next((int)fileInfo.Length - blockSize);
