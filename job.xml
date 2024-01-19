@@ -1,9 +1,0 @@
-<job_desc>
-<task>
-<application>DataFreezer.exe</application>
-<stderr_filename>stderr_file</stderr_filename>
-<stdout_filename>stdout_file</stdout_filename>
-<multi_process/>
-<command_line>image.png</command_line>
-</task>
-</job_desc>

@@ -17,21 +17,22 @@ try
 {
     //boinc_init();
     var rand = new Random();
-    var fileInfo = new System.IO.FileInfo(args[0]);
+    var path = (new System.Text.RegularExpressions.Regex("<soft_link>(.+)</soft_link>")).Match(
+    System.IO.File.ReadAllText(args[0])
+    ).Groups[1].Value;
+    Console.Error.WriteLine($"Phisical image path: {path}");
+    var fileInfo = new System.IO.FileInfo(path);
     if (fileInfo.LinkTarget != null)
     {
         fileInfo = new System.IO.FileInfo(fileInfo.LinkTarget);
         Console.Error.WriteLine($"Resolved link: {fileInfo.Name}");
     }
+    else
+    {
+        Console.Error.WriteLine($"Not resolving symbolic link: {fileInfo.Name}");
+    }
     var contentLength = fileInfo.Length;
     Console.Error.WriteLine($"content length: {contentLength}");
-    var fileBytes = System.IO.File.ReadAllBytes(args[0]);
-    Console.Error.WriteLine($"alter length: {fileBytes.Length}");
-    System.Threading.Thread.Sleep(1000 * 60 * 10);
-    for (int i = 0; i < 100 && i < fileBytes.Length; ++i)
-    {
-        Console.Error.WriteLine($"{(char)fileBytes[i]} {fileBytes[i]}");
-    }
     var log2 = Math.Log2(contentLength);
     Console.Error.WriteLine($"log2: {log2}");
 
@@ -73,7 +74,7 @@ static string ComputeHashes(int maxBlockSizeLog2, System.IO.FileInfo fileInfo, R
         var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(blockData));
         var dataEntity = $"<hash offset=\"{offset}\", blockSize=\"{blockSize}\">{hash}</hash>";
         hashes.AppendLine(dataEntity);
-        System.Threading.Thread.Sleep(1000 * 60);
+        System.Threading.Thread.Sleep(1000 * 60 * 1);
     }
     hashes.AppendLine("</hashes>");
     return hashes.ToString();
