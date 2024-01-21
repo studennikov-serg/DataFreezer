@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text;
 //using System.Data.SQLite;
 /*
@@ -16,9 +17,8 @@ static extern int boinc_receive_trickle_down(string buf, int len);
 try
 {
     //boinc_init();
-    var rand = new Random();
     var path = (new System.Text.RegularExpressions.Regex("<soft_link>(.+)</soft_link>")).Match(
-    System.IO.File.ReadAllText(args[0])
+    File.ReadAllText(args[0])
     ).Groups[1].Value;
     Console.Error.WriteLine($"Phisical image path: {path}");
     var fileInfo = new System.IO.FileInfo(path);
@@ -42,7 +42,8 @@ try
     //Console.WriteLine($"pow {pow}");
     var maxBlockSize = 1 << truncatedLog2; // less than file size and is a power of 2
     Console.Error.WriteLine($"Max block size: {maxBlockSize}");
-    var fileHashes = ComputeHashes(truncatedLog2, fileInfo, rand);
+    var firstRandom = GetFirstRandom(fileInfo); // Bytes from in[put file, from offset 888
+    var fileHashes = ComputeHashes(truncatedLog2, fileInfo, firstRandom);
     Console.WriteLine($"[{fileHashes}]");
 }
 catch (Exception e)
@@ -57,26 +58,44 @@ finally
 }
 return 0;
 
-static string ComputeHashes(int maxBlockSizeLog2, System.IO.FileInfo fileInfo, Random rand)
+static string ComputeHashes(int maxBlockSizeLog2, FileInfo fileInfo, (Int64 offset, byte blockSize) rand)
 {
     var hashes = new StringBuilder();
     hashes.AppendLine("<hashes>");
-    FileStream stream = fileInfo.OpenRead();
-    for (int i = 0; i < 10; ++i)
+    using (FileStream stream = fileInfo.OpenRead())
     {
-        var blockSize = 1 << (rand.Next(maxBlockSizeLog2 - 10) + 10 + 1);
-        Console.Error.WriteLine($"Random block size: {blockSize}");
-        var blockData = new byte[blockSize];
+        for (int i = 0; i < 10; ++i)
+        {
+            var randBlockSizeLog2 = rand.blockSize % (maxBlockSizeLog2 - 10); // 0 <= randBlockSizeLog2 < maxBlockSizeLog2
+            Console.WriteLine($"randBlockSizeLog2: {randBlockSizeLog2}");
+            var blockSize = 1 << (randBlockSizeLog2 + 9 + 1); // min block size is 1024 bytes
+            var offset = rand.offset % (fileInfo.Length - blockSize);
+            Console.Error.WriteLine($"Random block size: {blockSize}");
+            var blockData = new byte[blockSize];
 
-        var offset = rand.Next((int)fileInfo.Length - blockSize);
-        stream.Position = offset;
-        stream.Read(blockData, 0, blockSize);
-        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(blockData));
-        var dataEntity = $"<hash offset=\"{offset}\", blockSize=\"{blockSize}\">{hash}</hash>";
-        hashes.AppendLine(dataEntity);
-        System.Threading.Thread.Sleep(1000 * 60 * 1);
-    }
+            stream.Position = offset;
+            stream.Read(blockData, 0, blockSize);
+            var hashBytes = System.Security.Cryptography.SHA256.HashData(blockData);
+            rand = (offset: Math.Abs(BitConverter.ToInt64(hashBytes, 0)), blockSize: hashBytes[8]); / new rand from current block hash
+        var hash = Convert.ToHexString(hashBytes);
+            var dataEntity = $"<hash offset=\"{offset}\", blockSize=\"{blockSize}\">{hash}</hash>";
+            hashes.AppendLine(dataEntity);
+            System.Threading.Thread.Sleep(1000 * 60 * 1);
+        }
+    } // using fileStream
     hashes.AppendLine("</hashes>");
     return hashes.ToString();
+}
+
+static (Int64 offset, byte blockSize) GetFirstRandom(FileInfo source)
+{
+    using (var fileStream = source.Open(FileMode.Open, FileAccess.Read))
+    {
+        fileStream.Position = 888;
+        using (var binaryReader = new BinaryReader(fileStream))
+        {
+            return (offset: Math.Abs(binaryReader.ReadInt64()), blockSize: binaryReader.ReadByte());
+        }
+    }
 }
 
