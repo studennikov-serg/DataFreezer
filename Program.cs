@@ -58,43 +58,46 @@ finally
 }
 return 0;
 
-static string ComputeHashes(int maxBlockSizeLog2, FileInfo fileInfo, (Int64 offset, byte blockSize) rand)
+static string ComputeHashes(int maxBlockSizeLog2, FileInfo fileInfo, (Int64 offset, byte blockSize, Random xoRand) rand)
 {
     var hashes = new StringBuilder();
     hashes.AppendLine("<hashes>");
     using (FileStream stream = fileInfo.OpenRead())
     {
-        for (int i = 0; i < 10; ++i)
+        for (int i = 0; i < 1000; ++i)
         {
-            var randBlockSizeLog2 = rand.blockSize % (maxBlockSizeLog2 - 10); // 0 <= randBlockSizeLog2 < maxBlockSizeLog2
-            Console.WriteLine($"randBlockSizeLog2: {randBlockSizeLog2}");
-            var blockSize = 1 << (randBlockSizeLog2 + 9 + 1); // min block size is 1024 bytes
-            var offset = rand.offset % (fileInfo.Length - blockSize);
-            Console.Error.WriteLine($"Random block size: {blockSize}");
+            var randBlockSizeLog2 = rand.blockSize % (maxBlockSizeLog2 - 10 + 1); // 0 <= randBlockSizeLog2 < maxBlockSizeLog2
+            var blockSize = 1 << (randBlockSizeLog2 + 9 + 1); // min block size is 1024 bytes max is max block size
+            var offset = rand.offset % (fileInfo.Length - blockSize + 1);
             var blockData = new byte[blockSize];
 
             stream.Position = offset;
             stream.Read(blockData, 0, blockSize);
             var hashBytes = System.Security.Cryptography.SHA256.HashData(blockData);
-            rand = (offset: Math.Abs(BitConverter.ToInt64(hashBytes, 0)), blockSize: hashBytes[8]); / new rand from current block hash
-        var hash = Convert.ToHexString(hashBytes);
+            rand = (
+            offset: Math.Abs(BitConverter.ToInt64(hashBytes, 0)) ^ rand.xoRand.NextInt64(),
+            blockSize: (byte)(hashBytes[8] ^ rand.xoRand.Next()),
+            xoRand: rand.xoRand
+            );
+            // new rand from current block hash
+            var hash = Convert.ToBase64String(hashBytes, Base64FormattingOptions.InsertLineBreaks);
             var dataEntity = $"<hash offset=\"{offset}\", blockSize=\"{blockSize}\">{hash}</hash>";
             hashes.AppendLine(dataEntity);
-            System.Threading.Thread.Sleep(1000 * 60 * 1);
+            System.Threading.Thread.Sleep(1000);
         }
     } // using fileStream
     hashes.AppendLine("</hashes>");
     return hashes.ToString();
 }
 
-static (Int64 offset, byte blockSize) GetFirstRandom(FileInfo source)
+static (Int64 offset, byte blockSize, Random xoRand) GetFirstRandom(FileInfo source)
 {
     using (var fileStream = source.Open(FileMode.Open, FileAccess.Read))
     {
         fileStream.Position = 888;
-        using (var binaryReader = new BinaryReader(fileStream))
+        using (var reader = new BinaryReader(fileStream))
         {
-            return (offset: Math.Abs(binaryReader.ReadInt64()), blockSize: binaryReader.ReadByte());
+            return (offset: Math.Abs(reader.ReadInt64()), blockSize: reader.ReadByte(), xoRand: new Random(reader.ReadInt32()));
         }
     }
 }
