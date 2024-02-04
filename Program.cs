@@ -33,17 +33,17 @@ try
     }
     var contentLength = fileInfo.Length;
     Console.Error.WriteLine($"content length: {contentLength}");
-    var log2 = Math.Log2(contentLength);
+    var log2 = IntegerLog2(contentLength) - 1;
     Console.Error.WriteLine($"log2: {log2}");
 
-    var truncatedLog2 = (int)(log2);
-    Console.Error.WriteLine($"truncated log2: {truncatedLog2}");
+    //var truncatedLog2 = (int)(log2);
+    //Console.Error.WriteLine($"truncated log2: {truncatedLog2}");
     //var pow = Math.Pow(2, truncatedLog2);
     //Console.WriteLine($"pow {pow}");
-    var maxBlockSize = 1 << truncatedLog2; // less than file size and is a power of 2
+    var maxBlockSize = 1 << log2; // less than file size and is a power of 2
     Console.Error.WriteLine($"Max block size: {maxBlockSize}");
     var firstRandom = GetFirstRandom(fileInfo); // Bytes from in[put file, from offset 888
-    var fileHashes = ComputeHashes(truncatedLog2, fileInfo, firstRandom);
+    var fileHashes = ComputeHashes(log2, fileInfo, firstRandom);
     Console.WriteLine($"[{fileHashes}]");
 }
 catch (Exception e)
@@ -100,5 +100,14 @@ static (Int64 offset, byte blockSize, Random xoRand) GetFirstRandom(FileInfo sou
             return (offset: Math.Abs(reader.ReadInt64()), blockSize: reader.ReadByte(), xoRand: new Random(reader.ReadInt32()));
         }
     }
+}
+
+
+static int IntegerLog2(long Value)
+{
+return
+sizeof(long) * 8 // bytes count * 8 = bits count
+- System.Numerics.BitOperations.LeadingZeroCount((ulong)Value // - leading zero bits = log2
+);
 }
 
