@@ -1,0 +1,2 @@
+#!/bin/bash
+dotnet run symlink --CompareHashPrefixLength 7 --TestHashesCount 2000000 --IntersectionSearchCount 1000000
