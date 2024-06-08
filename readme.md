@@ -1,4 +1,4 @@
-###THe workload for https://noospheric.cloud/0Kdata
+###THe workload for https://frostydata.com/0Kdata
 To run use DotNet CLI:
 dotnet run symlink
 TO publish self-containing executable
