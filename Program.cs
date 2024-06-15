@@ -1,18 +1,19 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 //using System.Data.SQLite;
-/*
 using System.Runtime.InteropServices;
-[DllImport("./libboinc_api.so.7")]
+/*
+[DllImport("/home/serg/DataFreezer/libboinc_api.so.8.1.0")]
 static extern int boinc_init();
-[DllImport("./libboinc_api.so.7")]
+[DllImport("./libboinc_api.so.8.1.0")]
 static extern int boinc_finish(int status);
-[DllImport("libboinc_api.so.7", CharSet = CharSet.Ansi)]
+[DllImport("libboinc_api.so.8.1.0", CharSet = CharSet.Ansi)]
 static extern int boinc_send_trickle_up(string variety, string p);
-[DllImport("libboinc_api.so.7", CharSet = CharSet.Ansi)]
+[DllImport("libboinc_api.so.8.1.0", CharSet = CharSet.Ansi)]
 static extern int boinc_receive_trickle_down(string buf, int len);
 */
 
@@ -37,10 +38,13 @@ try
     var maxBlockSize = 1 << log2; // less than file length and is power of 2
     Console.Error.WriteLine($"Max block size: {maxBlockSize}");
     var firstRandom = GetFirstRandom(fileInfo); // Bytes from in[put file, from offset 888
+    var time = new Stopwatch();
+    time.Start();
     var fileHashes = ComputeHashes(log2, fileInfo, firstRandom, computeSettings);
-    Console.Error.WriteLine($"Hashes found: {fileHashes.count}");
-    Console.Error.WriteLine(fileHashes.content);
-    Console.Write(fileHashes.content);
+    time.Stop();
+    Console.Error.WriteLine($"Hashes found: {fileHashes.count}, time elapsed: {time.Elapsed}");
+    //Console.Error.WriteLine(fileHashes.content);
+    //Console.Write(fileHashes.content);
 }
 catch (Exception e)
 {
@@ -55,49 +59,52 @@ finally
 return 0;
 
 static (int count, string content) ComputeHashes(
-int maxBlockSizeLog2, FileInfo fileInfo,
-(Int64 offset, byte blockSize, Random xoRand) rand,
-(int compareHashPrefixLength, int testHashesCount, int intersectionSearchCount) settings)
+int MaxBlockSizeLog2, FileInfo FileInfo,
+(Int64 offset, byte blockSize, Random xoRand) Rand,
+(int compareHashPrefixLength, int testHashesCount, int intersectionSearchCount) Settings)
 {
-    Dictionary<string, byte[]> testHashes = new(settings.testHashesCount);
+HashSet<UInt64> testHashes = new(Settings.testHashesCount);
     Random testRand = new();
-    for (int i = 0; i < settings.testHashesCount;)
+    UInt64 prefixMask = 0;
+    for(int i = 0; i < Settings.compareHashPrefixLength; ++i)
+    { // building a value to mask hash prefix: 7 bytes length is 0xffffffffffffff
+    prefixMask |= 0xffLU << i * 8;
+    }
+    for (int i = 0; i < Settings.testHashesCount; )
     {
-        byte[] value = new byte[32];
-        testRand.NextBytes(value);
-        var keyBytes = SHA256.HashData(value);
-        var key = Convert.ToBase64String(keyBytes, Base64FormattingOptions.None).Substring(0, settings.compareHashPrefixLength);
-        if (!testHashes.ContainsKey(key))
+var key = (UInt64)testRand.NextInt64() & prefixMask;
+        if (!testHashes.Contains(key))
         {
-            testHashes.Add(key, value);
+            testHashes.Add(key);
             ++i;
         }
     }
     var hashes = new StringBuilder();
     hashes.AppendLine("<hashes>");
     int hashesFount = 0;
-    using (FileStream stream = fileInfo.OpenRead())
+    using (FileStream stream = FileInfo.OpenRead())
     {
-        for (int i = 0; i < settings.intersectionSearchCount; ++i)
+        for (int i = 0; i < Settings.intersectionSearchCount; ++i)
         {
-            var randBlockSizeLog2 = rand.blockSize % (maxBlockSizeLog2 - 10 + 1); // 0 <= randBlockSizeLog2 < maxBlockSizeLog2
+            var randBlockSizeLog2 = Rand.blockSize % (MaxBlockSizeLog2 - 10 + 1); // 0 <= randBlockSizeLog2 < maxBlockSizeLog2
             var blockSize = 1 << (randBlockSizeLog2 + 9 + 1); // min block size is 1024 bytes max is max block size
-            var offset = rand.offset % (fileInfo.Length - blockSize + 1);
+            var offset = Rand.offset % (FileInfo.Length - blockSize + 1);
             var blockData = new byte[blockSize];
 
             stream.Position = offset;
             stream.Read(blockData, 0, blockSize);
             var hashBytes = SHA256.HashData(blockData);
-            rand = (
-            offset: Math.Abs(BitConverter.ToInt64(hashBytes, 0)) ^ rand.xoRand.NextInt64(),
-            blockSize: (byte)(hashBytes[8] ^ rand.xoRand.Next()),
-            xoRand: rand.xoRand
+            Rand = (
+            offset: Math.Abs(BitConverter.ToInt64(hashBytes, 0)) ^ Rand.xoRand.NextInt64(),
+            blockSize: (byte)(hashBytes[8] ^ Rand.xoRand.Next()),
+            xoRand: Rand.xoRand
             ); // new rand from current block hash
-            var hash = Convert.ToBase64String(hashBytes, Base64FormattingOptions.None);
-            var hashToFind = hash.Substring(0, settings.compareHashPrefixLength);
-            if (testHashes.ContainsKey(hashToFind))
+            UInt64 hashPart = BitConverter.ToUInt64(hashBytes, 0); // part is enough for tests
+            UInt64 hashPrefix = hashPart & prefixMask;
+            if (testHashes.Contains(hashPrefix))
             {
-                var dataEntity = $"<hash offset=\"{offset}\", blockSize=\"{blockSize}\">{hash}</hash>";
+            var hashString = Convert.ToBase64String(hashBytes);
+                var dataEntity = $"<hash offset=\"{offset}\", blockSize=\"{blockSize}\">{hashString}</hash>";
                 hashes.AppendLine(dataEntity);
                 ++hashesFount;
             }
@@ -107,9 +114,9 @@ int maxBlockSizeLog2, FileInfo fileInfo,
     return (count: hashesFount, content: hashes.ToString());
 }
 
-static (Int64 offset, byte blockSize, Random xoRand) GetFirstRandom(FileInfo source)
+static (Int64 offset, byte blockSize, Random xoRand) GetFirstRandom(FileInfo Source)
 {
-    using (var fileStream = source.Open(FileMode.Open, FileAccess.Read))
+    using (var fileStream = Source.Open(FileMode.Open, FileAccess.Read))
     {
         fileStream.Position = 888;
         using (var reader = new BinaryReader(fileStream))
@@ -127,10 +134,10 @@ static int IntegerLog2(long Value)
     );
 }
 
-static (int compareHashPrefixLength, int testHashesCount, int intersectionSearchCount) ExtractParameters(string[] args)
+static (int compareHashPrefixLength, int testHashesCount, int intersectionSearchCount) ExtractParameters(string[] Args)
 {
     var extractedInfo = new Regex(@"--CompareHashPrefixLength (\d+) --TestHashesCount (\d+) --IntersectionSearchCount (\d+)").Match(
-    string.Join(" ", args, 1, args.Length - 1)
+    string.Join(" ", Args, 1, Args.Length - 1)
         ).Groups;
     return (
     compareHashPrefixLength: int.Parse(extractedInfo[1].Value),

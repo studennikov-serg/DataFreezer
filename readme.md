@@ -1,6 +1,8 @@
 ###THe workload for https://frostydata.com/0Kdata
 To run use DotNet CLI:
-dotnet run symlink
+./run
+or
+dotnet run symlink --CompareHashPrefixLength 7 --TestHashesCount 80000000 --IntersectionSearchCount 2000000
 TO publish self-containing executable
 dotnet publish
 
