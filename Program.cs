@@ -43,8 +43,8 @@ try
     var fileHashes = ComputeHashes(log2, fileInfo, firstRandom, computeSettings);
     time.Stop();
     Console.Error.WriteLine($"Hashes found: {fileHashes.count}, time elapsed: {time.Elapsed}");
-    //Console.Error.WriteLine(fileHashes.content);
-    //Console.Write(fileHashes.content);
+    Console.Error.WriteLine(fileHashes.content);
+    Console.Write(fileHashes.content);
 }
 catch (Exception e)
 {
@@ -63,16 +63,18 @@ int MaxBlockSizeLog2, FileInfo FileInfo,
 (Int64 offset, byte blockSize, Random xoRand) Rand,
 (int compareHashPrefixLength, int testHashesCount, int intersectionSearchCount) Settings)
 {
-HashSet<UInt64> testHashes = new(Settings.testHashesCount);
+    HashSet<UInt64> testHashes = new(Settings.testHashesCount);
     Random testRand = new();
-    UInt64 prefixMask = 0;
-    for(int i = 0; i < Settings.compareHashPrefixLength; ++i)
-    { // building a value to mask hash prefix: 7 bytes length is 0xffffffffffffff
-    prefixMask |= 0xffLU << i * 8;
-    }
-    for (int i = 0; i < Settings.testHashesCount; )
+    Int64 mask = 0xffL << (sizeof(Int64) - 1) * 8; // high byte = 0xff
+                                                   // shifts back to same amount bytes - prefix length; arithmetic shift extends sign bit
+    mask >>= (sizeof(Int64) - 1 - Settings.compareHashPrefixLength) * 8;
+    // now mask contains all high bits = 1,, prefix bits = 0
+    mask = ~mask; // negotiate and get prefix mask bits = 1, high bits = 0
+    UInt64 prefixMask = (UInt64)mask;
+    Console.WriteLine(prefixMask.ToString("x"));
+    for (int i = 0; i < Settings.testHashesCount;)
     {
-var key = (UInt64)testRand.NextInt64() & prefixMask;
+        var key = (UInt64)testRand.NextInt64() & prefixMask;
         if (!testHashes.Contains(key))
         {
             testHashes.Add(key);
@@ -103,7 +105,7 @@ var key = (UInt64)testRand.NextInt64() & prefixMask;
             UInt64 hashPrefix = hashPart & prefixMask;
             if (testHashes.Contains(hashPrefix))
             {
-            var hashString = Convert.ToBase64String(hashBytes);
+                var hashString = Convert.ToBase64String(hashBytes);
                 var dataEntity = $"<hash offset=\"{offset}\", blockSize=\"{blockSize}\">{hashString}</hash>";
                 hashes.AppendLine(dataEntity);
                 ++hashesFount;
